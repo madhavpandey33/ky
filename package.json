@@ -1,14 +1,14 @@
 {
-	"name": "ky",
-	"version": "1.11.0",
+	"name": "@mad_devx/ky",
+	"version": "1.0.1",
 	"description": "Tiny and elegant HTTP client based on the Fetch API",
 	"license": "MIT",
-	"repository": "sindresorhus/ky",
-	"funding": "https://github.com/sindresorhus/ky?sponsor=1",
+	"repository": "@mad_devx/ky",
+	"funding": "https://github.com/madhavpandey33/ky",
 	"author": {
-		"name": "Sindre Sorhus",
-		"email": "sindresorhus@gmail.com",
-		"url": "https://sindresorhus.com"
+		"name": "Madhav Pandey",
+		"email": "madhavpandey33@gmail.com",
+		"url": "https://madhavpandey.com"
 	},
 	"type": "module",
 	"exports": {
