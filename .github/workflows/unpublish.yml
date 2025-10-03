@@ -100,6 +100,33 @@ jobs:
       with:
         node-version: '18'
         registry-url: 'https://registry.npmjs.org'
+    - name: Set new latest tag first
+      run: |-
+        NEW_LATEST="${{ github.event.inputs.new_latest_version }}"
+        PACKAGE_NAME="${{ github.event.inputs.package_name }}"
+        
+        echo "🏷️  Setting ${PACKAGE_NAME}@${NEW_LATEST} as latest BEFORE unpublishing..."
+        echo "📋 This ensures 'latest' always points to a valid version"
+        
+        npm dist-tag add "${PACKAGE_NAME}@${NEW_LATEST}" latest
+        
+        echo "✅ Successfully set ${PACKAGE_NAME}@${NEW_LATEST} as latest"
+      env:
+        NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+    - name: Verify latest tag update
+      run: |-
+        PACKAGE_NAME="${{ github.event.inputs.package_name }}"
+        
+        echo "🔍 Verifying latest tag was updated..."
+        CURRENT_LATEST=$(npm view "${PACKAGE_NAME}" dist-tags.latest)
+        echo "Current latest version: ${CURRENT_LATEST}"
+        
+        if [ "${CURRENT_LATEST}" = "${{ github.event.inputs.new_latest_version }}" ]; then
+          echo "✅ Latest tag successfully updated to ${{ github.event.inputs.new_latest_version }}"
+        else
+          echo "⚠️  Latest tag might not have updated yet (registry propagation)"
+          echo "⚠️  Proceeding with unpublish anyway..."
+        fi
     - name: Execute unpublish
       run: |-
         echo "🚨 EXECUTING UNPUBLISH - This action is irreversible!"
@@ -107,6 +134,7 @@ jobs:
         echo "🏷️  Version: ${{ github.event.inputs.version }}"
         echo "👤 Approved by: ${{ github.actor }}"
         echo "⏰ Timestamp: $(date -u)"
+        echo "✅ Latest tag already updated to: ${{ github.event.inputs.new_latest_version }}"
     - run: npm unpublish ${{ github.event.inputs.package_name }}@${{ github.event.inputs.version }} --force
       env:
         NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -140,31 +168,6 @@ jobs:
             break
           fi
         done
-    - name: Set new latest tag
-      run: |-
-        NEW_LATEST="${{ github.event.inputs.new_latest_version }}"
-        PACKAGE_NAME="${{ github.event.inputs.package_name }}"
-        
-        echo "🏷️  Setting ${PACKAGE_NAME}@${NEW_LATEST} as latest..."
-        
-        npm dist-tag add "${PACKAGE_NAME}@${NEW_LATEST}" latest
-        
-        echo "✅ Successfully set ${PACKAGE_NAME}@${NEW_LATEST} as latest"
-      env:
-        NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-    - name: Verify latest tag
-      run: |-
-        PACKAGE_NAME="${{ github.event.inputs.package_name }}"
-        
-        echo "🔍 Verifying latest tag..."
-        CURRENT_LATEST=$(npm view "${PACKAGE_NAME}" dist-tags.latest)
-        echo "Current latest version: ${CURRENT_LATEST}"
-        
-        if [ "${CURRENT_LATEST}" = "${{ github.event.inputs.new_latest_version }}" ]; then
-          echo "✅ Latest tag successfully updated to ${{ github.event.inputs.new_latest_version }}"
-        else
-          echo "⚠️  Latest tag might not have updated yet (registry propagation)"
-        fi
 
   post-unpublish:
     runs-on: ubuntu-latest
