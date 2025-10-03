@@ -1,6 +1,6 @@
 {
 	"name": "@mad_devx/ky",
-	"version": "3.0.0",
+	"version": "4.0.0",
 	"description": "Tiny and elegant HTTP client based on the Fetch API",
 	"license": "MIT",
 	"repository": "@mad_devx/ky",
