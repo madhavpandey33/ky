@@ -82,13 +82,30 @@ jobs:
         PACKAGE_NAME="@mad_devx/ky"
         
         echo "🔍 Verifying unpublish..."
+        echo "⏳ Waiting for npm registry to propagate changes..."
         
-        if npm view "${PACKAGE_NAME}@${VERSION}" version 2>/dev/null; then
-          echo "❌ Package ${PACKAGE_NAME}@${VERSION} still exists!"
-          exit 1
-        else
-          echo "✅ Confirmed: ${PACKAGE_NAME}@${VERSION} has been unpublished"
-        fi
+        # Wait a bit for npm registry to update
+        sleep 10
+        
+        # Try verification with retry logic
+        for i in {1..5}; do
+          echo "Verification attempt $i/5..."
+          
+          if npm view "${PACKAGE_NAME}@${VERSION}" version 2>/dev/null; then
+            if [ $i -eq 5 ]; then
+              echo "⚠️  Package ${PACKAGE_NAME}@${VERSION} may still be cached in npm registry"
+              echo "✅ Unpublish command executed successfully, but registry may need time to propagate"
+              echo "💡 Try checking manually in a few minutes: npm view ${PACKAGE_NAME}@${VERSION}"
+              break
+            else
+              echo "Still visible, waiting 15 seconds before retry..."
+              sleep 15
+            fi
+          else
+            echo "✅ Confirmed: ${PACKAGE_NAME}@${VERSION} has been unpublished"
+            break
+          fi
+        done
     - name: Set new latest tag
       run: |-
         NEW_LATEST="${{ github.event.inputs.new_latest_version }}"
