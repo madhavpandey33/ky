@@ -10,6 +10,10 @@ on:
         description: 'Version to unpublish (e.g., 1.1.1)'
         required: true
         type: string
+      new_latest_version:
+        description: 'Version to set as new "latest" tag (e.g., 1.1.0)'
+        required: true
+        type: string
       confirm:
         description: 'Type "CONFIRM" to proceed with unpublishing'
         required: true
@@ -48,10 +52,24 @@ jobs:
           echo "❌ Package ${PACKAGE_NAME}@${VERSION} not found"
           exit 1
         fi
+    - name: Validate new latest version exists
+      run: |-
+        NEW_LATEST="${{ github.event.inputs.new_latest_version }}"
+        PACKAGE_NAME="@mad_devx/ky"
+        
+        echo "🔍 Checking if new latest version ${PACKAGE_NAME}@${NEW_LATEST} exists..."
+        
+        if npm view "${PACKAGE_NAME}@${NEW_LATEST}" version 2>/dev/null; then
+          echo "✅ Package ${PACKAGE_NAME}@${NEW_LATEST} found and will be set as latest"
+        else
+          echo "❌ Package ${PACKAGE_NAME}@${NEW_LATEST} not found - cannot set as latest"
+          exit 1
+        fi
     - name: Display unpublish details
       run: |-
         echo "📦 Package: @mad_devx/ky"
-        echo "🏷️  Version: ${{ github.event.inputs.version }}"
+        echo "🏷️  Version to unpublish: ${{ github.event.inputs.version }}"
+        echo "🆕 New latest version: ${{ github.event.inputs.new_latest_version }}"
         echo "👤 Triggered by: ${{ github.actor }}"
         echo "⏰ Timestamp: $(date -u)"
         echo "⚠️  WARNING: This action is permanent and irreversible!"
@@ -71,6 +89,31 @@ jobs:
         else
           echo "✅ Confirmed: ${PACKAGE_NAME}@${VERSION} has been unpublished"
         fi
+    - name: Set new latest tag
+      run: |-
+        NEW_LATEST="${{ github.event.inputs.new_latest_version }}"
+        PACKAGE_NAME="@mad_devx/ky"
+        
+        echo "🏷️  Setting ${PACKAGE_NAME}@${NEW_LATEST} as latest..."
+        
+        npm dist-tag add "${PACKAGE_NAME}@${NEW_LATEST}" latest
+        
+        echo "✅ Successfully set ${PACKAGE_NAME}@${NEW_LATEST} as latest"
+      env:
+        NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+    - name: Verify latest tag
+      run: |-
+        PACKAGE_NAME="@mad_devx/ky"
+        
+        echo "🔍 Verifying latest tag..."
+        CURRENT_LATEST=$(npm view "${PACKAGE_NAME}" dist-tags.latest)
+        echo "Current latest version: ${CURRENT_LATEST}"
+        
+        if [ "${CURRENT_LATEST}" = "${{ github.event.inputs.new_latest_version }}" ]; then
+          echo "✅ Latest tag successfully updated to ${{ github.event.inputs.new_latest_version }}"
+        else
+          echo "⚠️  Latest tag might not have updated yet (registry propagation)"
+        fi
 
   post-unpublish:
     runs-on: ubuntu-latest
@@ -83,8 +126,9 @@ jobs:
       run: |-
         echo "## 📋 Unpublish Summary" >> $GITHUB_STEP_SUMMARY
         echo "- **Package**: @mad_devx/ky" >> $GITHUB_STEP_SUMMARY
-        echo "- **Version**: ${{ github.event.inputs.version }}" >> $GITHUB_STEP_SUMMARY
-        echo "- **Status**: ✅ Successfully unpublished" >> $GITHUB_STEP_SUMMARY
+        echo "- **Unpublished Version**: ${{ github.event.inputs.version }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **New Latest Version**: ${{ github.event.inputs.new_latest_version }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Status**: ✅ Successfully unpublished and latest tag updated" >> $GITHUB_STEP_SUMMARY
         echo "- **Triggered by**: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
         echo "- **Timestamp**: $(date -u)" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
