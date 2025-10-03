@@ -6,6 +6,11 @@ name: NPM Unpublish
 on:
   workflow_dispatch:
     inputs:
+      package_name:
+        description: 'Package name (e.g., @mad_devx/ky)'
+        required: true
+        type: string
+        default: '@mad_devx/ky'
       version:
         description: 'Version to unpublish (e.g., 1.1.1)'
         required: true
@@ -20,8 +25,7 @@ on:
         type: string
 
 jobs:
-  unpublish:
-
+  validate-and-confirm:
     runs-on: ubuntu-latest
     if: "github.event.inputs.confirm == 'CONFIRM'"
     
@@ -42,7 +46,7 @@ jobs:
     - name: Verify package exists
       run: |-
         VERSION="${{ github.event.inputs.version }}"
-        PACKAGE_NAME="@mad_devx/ky"
+        PACKAGE_NAME="${{ github.event.inputs.package_name }}"
         
         echo "🔍 Checking if package ${PACKAGE_NAME}@${VERSION} exists..."
         
@@ -55,7 +59,7 @@ jobs:
     - name: Validate new latest version exists
       run: |-
         NEW_LATEST="${{ github.event.inputs.new_latest_version }}"
-        PACKAGE_NAME="@mad_devx/ky"
+        PACKAGE_NAME="${{ github.event.inputs.package_name }}"
         
         echo "🔍 Checking if new latest version ${PACKAGE_NAME}@${NEW_LATEST} exists..."
         
@@ -67,19 +71,49 @@ jobs:
         fi
     - name: Display unpublish details
       run: |-
-        echo "📦 Package: @mad_devx/ky"
+        echo "📦 Package: ${{ github.event.inputs.package_name }}"
         echo "🏷️  Version to unpublish: ${{ github.event.inputs.version }}"
         echo "🆕 New latest version: ${{ github.event.inputs.new_latest_version }}"
         echo "👤 Triggered by: ${{ github.actor }}"
         echo "⏰ Timestamp: $(date -u)"
         echo "⚠️  WARNING: This action is permanent and irreversible!"
-    - run: npm unpublish @mad_devx/ky@${{ github.event.inputs.version }} --force
+        echo ""
+        echo "## 🚨 FINAL CONFIRMATION REQUIRED"
+        echo "The validation is complete. To proceed with unpublishing:"
+        echo "1. Review the details above carefully"
+        echo "2. Go to the 'unpublish-execution' job"
+        echo "3. Click 'Review deployments' and approve to continue"
+        echo ""
+        echo "⚠️  Once approved, ${{ github.event.inputs.package_name }}@${{ github.event.inputs.version }} will be PERMANENTLY removed from npm!"
+
+  unpublish-execution:
+    runs-on: ubuntu-latest
+    needs: [validate-and-confirm]
+    environment: 
+      name: unpublish-approval
+      url: https://www.npmjs.com/package/@mad_devx/ky
+    
+    steps:
+    - uses: actions/checkout@v2
+    - name: Setup Node.js environment
+      uses: actions/setup-node@v1
+      with:
+        node-version: '18'
+        registry-url: 'https://registry.npmjs.org'
+    - name: Execute unpublish
+      run: |-
+        echo "🚨 EXECUTING UNPUBLISH - This action is irreversible!"
+        echo "📦 Package: ${{ github.event.inputs.package_name }}"
+        echo "🏷️  Version: ${{ github.event.inputs.version }}"
+        echo "👤 Approved by: ${{ github.actor }}"
+        echo "⏰ Timestamp: $(date -u)"
+    - run: npm unpublish ${{ github.event.inputs.package_name }}@${{ github.event.inputs.version }} --force
       env:
         NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
     - name: Verify unpublish success
       run: |-
         VERSION="${{ github.event.inputs.version }}"
-        PACKAGE_NAME="@mad_devx/ky"
+        PACKAGE_NAME="${{ github.event.inputs.package_name }}"
         
         echo "🔍 Verifying unpublish..."
         echo "⏳ Waiting for npm registry to propagate changes..."
@@ -109,7 +143,7 @@ jobs:
     - name: Set new latest tag
       run: |-
         NEW_LATEST="${{ github.event.inputs.new_latest_version }}"
-        PACKAGE_NAME="@mad_devx/ky"
+        PACKAGE_NAME="${{ github.event.inputs.package_name }}"
         
         echo "🏷️  Setting ${PACKAGE_NAME}@${NEW_LATEST} as latest..."
         
@@ -120,7 +154,7 @@ jobs:
         NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
     - name: Verify latest tag
       run: |-
-        PACKAGE_NAME="@mad_devx/ky"
+        PACKAGE_NAME="${{ github.event.inputs.package_name }}"
         
         echo "🔍 Verifying latest tag..."
         CURRENT_LATEST=$(npm view "${PACKAGE_NAME}" dist-tags.latest)
@@ -134,7 +168,7 @@ jobs:
 
   post-unpublish:
     runs-on: ubuntu-latest
-    needs: [unpublish]
+    needs: [unpublish-execution]
     if: "github.event.inputs.confirm == 'CONFIRM'"
     
     steps:
@@ -142,7 +176,7 @@ jobs:
     - name: Post unpublish summary
       run: |-
         echo "## 📋 Unpublish Summary" >> $GITHUB_STEP_SUMMARY
-        echo "- **Package**: @mad_devx/ky" >> $GITHUB_STEP_SUMMARY
+        echo "- **Package**: ${{ github.event.inputs.package_name }}" >> $GITHUB_STEP_SUMMARY
         echo "- **Unpublished Version**: ${{ github.event.inputs.version }}" >> $GITHUB_STEP_SUMMARY
         echo "- **New Latest Version**: ${{ github.event.inputs.new_latest_version }}" >> $GITHUB_STEP_SUMMARY
         echo "- **Status**: ✅ Successfully unpublished and latest tag updated" >> $GITHUB_STEP_SUMMARY
