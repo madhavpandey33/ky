@@ -26,7 +26,8 @@
 		"debug": "PWDEBUG=1 ava --timeout=2m",
 		"release": "np",
 		"build": "del-cli distribution && tsc --project tsconfig.dist.json",
-		"prepare": "npm run build"
+		"prepare": "npm run build",
+		"unpublish": "node scripts/unpublish.js"
 	},
 	"files": [
 		"distribution"

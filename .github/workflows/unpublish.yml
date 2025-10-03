@@ -1,0 +1,96 @@
+# This workflow will unpublish a specific version from npm registry with safety checks and confirmations
+# For more information see: https://docs.npmjs.com/unpublishing-packages-from-the-registry
+
+name: NPM Unpublish
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to unpublish (e.g., 1.1.1)'
+        required: true
+        type: string
+      confirm:
+        description: 'Type "CONFIRM" to proceed with unpublishing'
+        required: true
+        type: string
+
+jobs:
+  unpublish:
+
+    runs-on: ubuntu-latest
+    if: "github.event.inputs.confirm == 'CONFIRM'"
+    
+    steps:
+    - uses: actions/checkout@v2
+    - name: Validate confirmation input
+      run: |-
+        if [ "${{ github.event.inputs.confirm }}" != "CONFIRM" ]; then
+          echo "❌ Confirmation not provided. You must type 'CONFIRM' to proceed."
+          exit 1
+        fi
+        echo "✅ Confirmation received"
+    - name: Setup Node.js environment
+      uses: actions/setup-node@v1
+      with:
+        node-version: '18'
+        registry-url: 'https://registry.npmjs.org'
+    - name: Verify package exists
+      run: |-
+        VERSION="${{ github.event.inputs.version }}"
+        PACKAGE_NAME="@mad_devx/ky"
+        
+        echo "🔍 Checking if package ${PACKAGE_NAME}@${VERSION} exists..."
+        
+        if npm view "${PACKAGE_NAME}@${VERSION}" version 2>/dev/null; then
+          echo "✅ Package ${PACKAGE_NAME}@${VERSION} found"
+        else
+          echo "❌ Package ${PACKAGE_NAME}@${VERSION} not found"
+          exit 1
+        fi
+    - name: Display unpublish details
+      run: |-
+        echo "📦 Package: @mad_devx/ky"
+        echo "🏷️  Version: ${{ github.event.inputs.version }}"
+        echo "👤 Triggered by: ${{ github.actor }}"
+        echo "⏰ Timestamp: $(date -u)"
+        echo "⚠️  WARNING: This action is permanent and irreversible!"
+    - run: npm unpublish @mad_devx/ky@${{ github.event.inputs.version }} --force
+      env:
+        NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+    - name: Verify unpublish success
+      run: |-
+        VERSION="${{ github.event.inputs.version }}"
+        PACKAGE_NAME="@mad_devx/ky"
+        
+        echo "🔍 Verifying unpublish..."
+        
+        if npm view "${PACKAGE_NAME}@${VERSION}" version 2>/dev/null; then
+          echo "❌ Package ${PACKAGE_NAME}@${VERSION} still exists!"
+          exit 1
+        else
+          echo "✅ Confirmed: ${PACKAGE_NAME}@${VERSION} has been unpublished"
+        fi
+
+  post-unpublish:
+    runs-on: ubuntu-latest
+    needs: [unpublish]
+    if: "github.event.inputs.confirm == 'CONFIRM'"
+    
+    steps:
+    - uses: actions/checkout@v2
+    - name: Post unpublish summary
+      run: |-
+        echo "## 📋 Unpublish Summary" >> $GITHUB_STEP_SUMMARY
+        echo "- **Package**: @mad_devx/ky" >> $GITHUB_STEP_SUMMARY
+        echo "- **Version**: ${{ github.event.inputs.version }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Status**: ✅ Successfully unpublished" >> $GITHUB_STEP_SUMMARY
+        echo "- **Triggered by**: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Timestamp**: $(date -u)" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "⚠️ **Important**: This action cannot be undone. The version has been permanently removed from npm." >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Next Steps" >> $GITHUB_STEP_SUMMARY
+        echo "- Monitor dependent projects for potential issues" >> $GITHUB_STEP_SUMMARY
+        echo "- Consider publishing a fixed version if needed" >> $GITHUB_STEP_SUMMARY
+        echo "- Update documentation if necessary" >> $GITHUB_STEP_SUMMARY
