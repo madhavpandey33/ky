@@ -1,4 +1,4 @@
-# This workflow will deprecate a specific version from npm registry with safety checks and confirmations
+# This workflow will deprecate a specific version from npm registry with a dry run preview
 # For more information see: https://docs.npmjs.com/cli/v8/commands/npm-deprecate
 
 name: NPM Deprecate
@@ -15,121 +15,96 @@ on:
         description: 'Version to deprecate (e.g., 1.1.1)'
         required: true
         type: string
-      deprecation_message:
-        description: 'Deprecation message (e.g., "This version has security vulnerabilities. Please upgrade to 1.1.2+")'
+      message:
+        description: 'Deprecation message'
         required: true
         type: string
-      dry_run:
-        description: 'Dry run mode (true = simulate only, false = execute deprecation)'
-        required: false
-        type: boolean
-        default: true
-      confirm:
-        description: 'Type "CONFIRM" to proceed with deprecation'
-        required: true
-        type: string
+        default: 'This version has been deprecated. Please upgrade to the latest version.'
 
 jobs:
-  validate-and-confirm:
+  deprecate:
     runs-on: ubuntu-latest
-    if: "github.event.inputs.confirm == 'CONFIRM'"
     
     steps:
     - uses: actions/checkout@v2
-    - name: Validate confirmation input
-      run: |-
-        if [ "${{ github.event.inputs.confirm }}" != "CONFIRM" ]; then
-          echo "❌ Confirmation not provided. You must type 'CONFIRM' to proceed."
-          exit 1
-        fi
-        echo "✅ Confirmation received"
     - name: Setup Node.js environment
       uses: actions/setup-node@v1
       with:
         node-version: '18'
         registry-url: 'https://registry.npmjs.org'
-    - name: Verify package exists
+    
+    - name: Display deprecation details
+      run: |-
+        echo "📦 Package: ${{ github.event.inputs.package_name }}"
+        echo "🏷️  Version: ${{ github.event.inputs.version }}"
+        echo "💬 Message: ${{ github.event.inputs.message }}"
+        echo "👤 Triggered by: ${{ github.actor }}"
+        echo "⏰ Timestamp: $(date -u)"
+    
+    - name: Validate package exists
       run: |-
         VERSION="${{ github.event.inputs.version }}"
         PACKAGE_NAME="${{ github.event.inputs.package_name }}"
         
-        echo "🔍 Checking if package ${PACKAGE_NAME}@${VERSION} exists..."
+        echo "🔍 Checking if package exists..."
         
         if npm view "${PACKAGE_NAME}@${VERSION}" version 2>/dev/null; then
           echo "✅ Package ${PACKAGE_NAME}@${VERSION} found"
+          echo "📋 Current package info:"
+          npm view "${PACKAGE_NAME}@${VERSION}" --json | head -20
         else
           echo "❌ Package ${PACKAGE_NAME}@${VERSION} not found"
           exit 1
         fi
-    - name: Display deprecation details
-      run: |-
-        echo "📦 Package: ${{ github.event.inputs.package_name }}"
-        echo "🏷️  Version to deprecate: ${{ github.event.inputs.version }}"
-        echo "💬 Deprecation message: ${{ github.event.inputs.deprecation_message }}"
-        echo "🔍 Dry run mode: ${{ github.event.inputs.dry_run }}"
-        echo "👤 Triggered by: ${{ github.actor }}"
-        echo "⏰ Timestamp: $(date -u)"
-        echo ""
-        if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
-          echo "## 🧪 DRY RUN MODE - SIMULATION ONLY"
-          echo "This is a simulation. No actual changes will be made to npm registry."
-        else
-          echo "## ⚡ PROCEEDING WITH DEPRECATION"
-          echo "The validation is complete. Proceeding automatically with deprecation."
-        fi
-        echo ""
-        echo "⚠️  ${{ github.event.inputs.package_name }}@${{ github.event.inputs.version }} will be marked as deprecated!"
-
-  deprecate-execution:
-    runs-on: ubuntu-latest
-    needs: [validate-and-confirm]
     
-    steps:
-    - uses: actions/checkout@v2
-    - name: Setup Node.js environment
-      uses: actions/setup-node@v1
-      with:
-        node-version: '18'
-        registry-url: 'https://registry.npmjs.org'
-    - name: Wait 5 minutes before deprecation
+    - name: Preview deprecation
       run: |-
-        if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
-          echo "🧪 DRY RUN MODE - Skipping 5 minute wait"
-        else
-          echo "⏳ Waiting 5 minutes before proceeding with deprecation..."
-          echo "🕐 Start time: $(date -u)"
-          echo "⚠️  You have 5 minutes to cancel this workflow if needed"
-          echo "📦 Package to deprecate: ${{ github.event.inputs.package_name }}@${{ github.event.inputs.version }}"
-          echo "💬 Message: ${{ github.event.inputs.deprecation_message }}"
-          echo "🛑 To cancel: Go to Actions tab and cancel this workflow run"
-          sleep 300
-          echo "✅ Wait period completed at: $(date -u)"
-          echo "🚀 Proceeding with deprecation operation..."
-        fi
+        PACKAGE_NAME="${{ github.event.inputs.package_name }}"
+        VERSION="${{ github.event.inputs.version }}"
+        MESSAGE="${{ github.event.inputs.message }}"
+        
+        echo "📋 Deprecation Preview"
+        echo ""
+        echo "The following command will be executed:"
+        echo "   npm deprecate \"${PACKAGE_NAME}@${VERSION}\" \"${MESSAGE}\""
+        echo ""
+        echo "✅ This will mark ${PACKAGE_NAME}@${VERSION} as deprecated"
+        echo "✅ Users will see: '${MESSAGE}'"
+        echo "✅ The package will still be installable"
+        echo ""
+        echo "⏳ Waiting 2 minutes before executing deprecation..."
+    
+    - name: Wait for 2 minutes
+      run: |-
+        echo "⏳ Starting 2-minute wait period..."
+        echo "⏰ Start time: $(date -u)"
+        
+        # Wait for 2 minutes (120 seconds)
+        for i in {1..12}; do
+          REMAINING=$((120 - (i - 1) * 10))
+          echo "⏱️  ${REMAINING} seconds remaining..."
+          sleep 10
+        done
+        
+        echo "⏰ End time: $(date -u)"
+        echo "✅ Wait period complete. Proceeding with deprecation..."
+    
     - name: Execute deprecation
       run: |-
-        if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
-          echo "🧪 DRY RUN MODE - SIMULATION ONLY"
-        else
-          echo "🚨 EXECUTING DEPRECATION"
-        fi
-        echo "📦 Package: ${{ github.event.inputs.package_name }}"
-        echo "🏷️  Version: ${{ github.event.inputs.version }}"
-        echo "💬 Message: ${{ github.event.inputs.deprecation_message }}"
-        echo "👤 Triggered by: ${{ github.actor }}"
-        echo "⏰ Timestamp: $(date -u)"
-        echo ""
-        if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
-          echo "📝 Would execute: npm deprecate \"${{ github.event.inputs.package_name }}@${{ github.event.inputs.version }}\" \"${{ github.event.inputs.deprecation_message }}\""
-          echo "✅ Dry run completed successfully - no changes made"
-        fi
-    - name: Execute npm deprecate command
-      if: ${{ github.event.inputs.dry_run == 'false' }}
-      run: npm deprecate "${{ github.event.inputs.package_name }}@${{ github.event.inputs.version }}" "${{ github.event.inputs.deprecation_message }}"
+        PACKAGE_NAME="${{ github.event.inputs.package_name }}"
+        VERSION="${{ github.event.inputs.version }}"
+        MESSAGE="${{ github.event.inputs.message }}"
+        
+        echo "🚨 EXECUTING DEPRECATION"
+        echo "📦 Deprecating ${PACKAGE_NAME}@${VERSION}..."
+        
+        npm deprecate "${PACKAGE_NAME}@${VERSION}" "${MESSAGE}"
+        
+        echo "✅ Successfully deprecated ${PACKAGE_NAME}@${VERSION}"
       env:
-        NODE_AUTH_TOKEN: ${{ secrets.ADOBE_BOT_NPM_TOKEN }}
-    - name: Verify deprecation success
-      if: ${{ github.event.inputs.dry_run == 'false' }}
+        NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+    
+    - name: Verify deprecation
       run: |-
         VERSION="${{ github.event.inputs.version }}"
         PACKAGE_NAME="${{ github.event.inputs.package_name }}"
@@ -137,8 +112,7 @@ jobs:
         echo "🔍 Verifying deprecation..."
         echo "⏳ Waiting for npm registry to propagate changes..."
         
-        # Wait a bit for npm registry to update
-        sleep 10
+        sleep 5
         
         # Check if the package is marked as deprecated
         DEPRECATED_MSG=$(npm view "${PACKAGE_NAME}@${VERSION}" deprecated 2>/dev/null || echo "")
@@ -151,44 +125,19 @@ jobs:
           echo "✅ Deprecation command executed successfully, but registry may need time to propagate"
           echo "💡 Try checking manually in a few minutes: npm view ${PACKAGE_NAME}@${VERSION}"
         fi
-
-  post-deprecation:
-    runs-on: ubuntu-latest
-    needs: [deprecate-execution]
-    if: "github.event.inputs.confirm == 'CONFIRM'"
     
-    steps:
-    - uses: actions/checkout@v2
-    - name: Post deprecation summary
+    - name: Summary
       run: |-
-        if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
-          echo "## 🧪 Dry Run Summary" >> $GITHUB_STEP_SUMMARY
-          echo "- **Mode**: 🧪 Dry Run (Simulation Only)" >> $GITHUB_STEP_SUMMARY
-        else
-          echo "## 📋 Deprecation Summary" >> $GITHUB_STEP_SUMMARY
-          echo "- **Mode**: ⚡ Live Execution" >> $GITHUB_STEP_SUMMARY
-        fi
+        echo "## 📋 Deprecation Summary" >> $GITHUB_STEP_SUMMARY
         echo "- **Package**: ${{ github.event.inputs.package_name }}" >> $GITHUB_STEP_SUMMARY
         echo "- **Version**: ${{ github.event.inputs.version }}" >> $GITHUB_STEP_SUMMARY
-        echo "- **Deprecation Message**: ${{ github.event.inputs.deprecation_message }}" >> $GITHUB_STEP_SUMMARY
-        if [ "${{ github.event.inputs.dry_run }}" = "false" ]; then
-          echo "- **Status**: ✅ Successfully deprecated" >> $GITHUB_STEP_SUMMARY
-        else
-          echo "- **Status**: ✅ Dry run completed - no changes made" >> $GITHUB_STEP_SUMMARY
-        fi
+        echo "- **Message**: ${{ github.event.inputs.message }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Status**: ✅ Successfully deprecated" >> $GITHUB_STEP_SUMMARY
         echo "- **Triggered by**: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
         echo "- **Timestamp**: $(date -u)" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
-        if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
-          echo "🧪 **Dry Run Mode**: This was a simulation only. No actual changes were made to npm registry." >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "To execute for real, run the workflow again with \`dry_run: false\`" >> $GITHUB_STEP_SUMMARY
-        else
-          echo "⚠️ **Important**: Users installing this version will see the deprecation warning." >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Next Steps" >> $GITHUB_STEP_SUMMARY
-          echo "- Monitor dependent projects for migration" >> $GITHUB_STEP_SUMMARY
-          echo "- Ensure a recommended replacement version exists" >> $GITHUB_STEP_SUMMARY
-          echo "- Update documentation to reflect the deprecation" >> $GITHUB_STEP_SUMMARY
-          echo "- Consider un-deprecating later if needed: \`npm deprecate <pkg>@<version> \"\"\`" >> $GITHUB_STEP_SUMMARY
-        fi
+        echo "### ℹ️  What this means" >> $GITHUB_STEP_SUMMARY
+        echo "- The package version is now marked as deprecated" >> $GITHUB_STEP_SUMMARY
+        echo "- Users installing it will see the deprecation warning" >> $GITHUB_STEP_SUMMARY
+        echo "- The package is still installable and functional" >> $GITHUB_STEP_SUMMARY
+        echo "- This action can be reversed by running: \`npm deprecate ${{ github.event.inputs.package_name }}@${{ github.event.inputs.version }} \"\"\`" >> $GITHUB_STEP_SUMMARY
